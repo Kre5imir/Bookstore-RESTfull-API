@@ -1,0 +1,679 @@
+openapi: 3.0.3
+info:
+  title: Readify Bookstore API
+  version: 1.0.0
+  description: |
+    REST API for the Readify bookstore catalog.
+
+    Resources are nouns addressed by stable URIs. Collection URIs list and create
+    resources. Item URIs retrieve, replace, partially update, and delete one
+    resource. Write requests use `application/json`. Successful creates return
+    `201` and a `Location` header. Successful deletes return `204` with an empty
+    body. Field validation failures return `400` with an `error.details` object.
+    Unknown resources return `404`. ISBN collisions and deleting an author who
+    still has books return `409`.
+
+    `PUT` replaces the writable representation. Omitted optional fields return
+    to their defaults. `PATCH` changes only the fields present in the body.
+
+    The catalog does not require authentication.
+  contact:
+    name: Readify Engineering
+
+servers:
+  - url: http://127.0.0.1:8000
+    description: Local API server
+
+tags:
+  - name: Books
+    description: Catalog books.
+  - name: Authors
+    description: Catalog authors.
+  - name: Operations
+    description: Service index, documentation, health, and metrics.
+
+paths:
+  /:
+    get:
+      tags: [Operations]
+      operationId: apiRoot
+      summary: Service index
+      responses:
+        '200':
+          description: API entry point.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceIndex'
+
+  /health:
+    get:
+      tags: [Operations]
+      operationId: health
+      summary: Liveness and database readiness
+      responses:
+        '200':
+          description: The process and database are reachable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '503':
+          description: The database check failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+
+  /metrics:
+    get:
+      tags: [Operations]
+      operationId: metrics
+      summary: Prometheus request metrics
+      responses:
+        '200':
+          description: Prometheus text exposition.
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /openapi.yaml:
+    get:
+      tags: [Operations]
+      operationId: openApiSpec
+      summary: This OpenAPI document
+      responses:
+        '200':
+          description: OpenAPI YAML document.
+          content:
+            application/yaml:
+              schema:
+                type: string
+
+  /books:
+    get:
+      tags: [Books]
+      operationId: listBooks
+      summary: List books
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Search'
+        - name: author_id
+          in: query
+          description: Keep books written by this author.
+          schema:
+            type: integer
+            minimum: 1
+        - name: in_stock
+          in: query
+          schema:
+            type: string
+            enum: ['true', 'false']
+        - name: ordering
+          in: query
+          schema:
+            type: string
+            enum: [id, -id, title, -title, published_year, -published_year, price, -price]
+            default: id
+      responses:
+        '200':
+          description: A page of books.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookList'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+    post:
+      tags: [Books]
+      operationId: createBook
+      summary: Add a book
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookWrite'
+      responses:
+        '201':
+          description: Book created.
+          headers:
+            Location:
+              description: Absolute URI of the new book.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Book'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+
+  /books/{id}:
+    parameters:
+      - $ref: '#/components/parameters/BookId'
+    get:
+      tags: [Books]
+      operationId: retrieveBook
+      summary: Retrieve a book
+      responses:
+        '200':
+          description: The book.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Book'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Books]
+      operationId: replaceBook
+      summary: Replace book details
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookWrite'
+      responses:
+        '200':
+          description: The replaced book.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Book'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+    patch:
+      tags: [Books]
+      operationId: updateBook
+      summary: Update book fields
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookPatch'
+      responses:
+        '200':
+          description: The updated book.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Book'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+    delete:
+      tags: [Books]
+      operationId: deleteBook
+      summary: Delete a book
+      responses:
+        '204':
+          description: The book was deleted.
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /authors:
+    get:
+      tags: [Authors]
+      operationId: listAuthors
+      summary: List authors
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Search'
+        - name: ordering
+          in: query
+          schema:
+            type: string
+            enum: [id, -id, name, -name]
+            default: id
+      responses:
+        '200':
+          description: A page of authors.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorList'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+    post:
+      tags: [Authors]
+      operationId: createAuthor
+      summary: Add an author
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthorWrite'
+      responses:
+        '201':
+          description: Author created.
+          headers:
+            Location:
+              description: Absolute URI of the new author.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Author'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+
+  /authors/{id}:
+    parameters:
+      - $ref: '#/components/parameters/AuthorId'
+    get:
+      tags: [Authors]
+      operationId: retrieveAuthor
+      summary: Retrieve an author
+      responses:
+        '200':
+          description: The author.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Author'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Authors]
+      operationId: replaceAuthor
+      summary: Replace an author
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthorWrite'
+      responses:
+        '200':
+          description: The replaced author.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Author'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+    patch:
+      tags: [Authors]
+      operationId: updateAuthor
+      summary: Update author fields
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthorPatch'
+      responses:
+        '200':
+          description: The updated author.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Author'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+    delete:
+      tags: [Authors]
+      operationId: deleteAuthor
+      summary: Delete an author
+      responses:
+        '204':
+          description: The author was deleted.
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+components:
+  parameters:
+    BookId:
+      name: id
+      in: path
+      required: true
+      description: Book identifier.
+      schema:
+        type: string
+    AuthorId:
+      name: id
+      in: path
+      required: true
+      description: Author identifier.
+      schema:
+        type: string
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: page_size
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    Search:
+      name: search
+      in: query
+      description: Case-insensitive match against the book title or author name.
+      schema:
+        type: string
+        maxLength: 200
+
+  responses:
+    ValidationError:
+      description: The request body or query parameters are invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: validation_error
+              message: Request validation failed.
+              details:
+                title:
+                  - This field is required.
+    NotFound:
+      description: The resource does not exist.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: not_found
+              message: Book not found.
+    Conflict:
+      description: The request conflicts with the current catalog.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: conflict
+              message: A book with this ISBN already exists.
+    UnsupportedMediaType:
+      description: The body was not sent as application/json.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              example: validation_error
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: string
+    ServiceIndex:
+      type: object
+      required: [name, version, documentation, health, metrics, resources]
+      properties:
+        name:
+          type: string
+          example: Readify Bookstore API
+        version:
+          type: string
+          example: 1.0.0
+        documentation:
+          type: string
+          example: /openapi.yaml
+        health:
+          type: string
+          example: /health
+        metrics:
+          type: string
+          example: /metrics
+        resources:
+          type: object
+          properties:
+            books:
+              type: string
+              example: /books
+            authors:
+              type: string
+              example: /authors
+    Health:
+      type: object
+      required: [status, version, uptime_seconds, checks]
+      properties:
+        status:
+          type: string
+          enum: [ok, unavailable]
+        version:
+          type: string
+        uptime_seconds:
+          type: number
+        checks:
+          type: object
+          properties:
+            database:
+              type: string
+              enum: [ok, error]
+    AuthorSummary:
+      type: object
+      required: [id, name, href]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        href:
+          type: string
+          example: /authors/1
+    Author:
+      type: object
+      required: [id, name, bio, created_at, updated_at]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        bio:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    AuthorWrite:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        bio:
+          type: string
+          maxLength: 5000
+    AuthorPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        bio:
+          type: string
+          maxLength: 5000
+    Book:
+      type: object
+      required: [id, title, isbn, published_year, price, in_stock, description, author, created_at, updated_at]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        isbn:
+          type: string
+          description: Normalized ISBN-10 or ISBN-13 without hyphens.
+        published_year:
+          type: integer
+        price:
+          type: string
+          example: '14.99'
+        in_stock:
+          type: boolean
+        description:
+          type: string
+        author:
+          $ref: '#/components/schemas/AuthorSummary'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    BookWrite:
+      type: object
+      required: [title, isbn, published_year, price, author_id]
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 300
+        isbn:
+          type: string
+          description: ISBN-10 or ISBN-13. Hyphens and spaces are accepted and removed.
+          example: 978-0-441-47812-5
+        published_year:
+          type: integer
+          minimum: 1450
+        price:
+          description: Non-negative amount with at most two decimal places. JSON numbers and numeric strings are accepted. Responses always use a two-decimal string.
+          oneOf:
+            - type: string
+              example: '14.99'
+            - type: number
+              example: 14.99
+        in_stock:
+          type: boolean
+          default: true
+        description:
+          type: string
+          maxLength: 5000
+          default: ''
+        author_id:
+          type: integer
+          minimum: 1
+    BookPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 300
+        isbn:
+          type: string
+        published_year:
+          type: integer
+          minimum: 1450
+        price:
+          oneOf:
+            - type: string
+            - type: number
+        in_stock:
+          type: boolean
+        description:
+          type: string
+          maxLength: 5000
+        author_id:
+          type: integer
+          minimum: 1
+    BookList:
+      type: object
+      required: [count, page, page_size, next, previous, results]
+      properties:
+        count:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Book'
+    AuthorList:
+      type: object
+      required: [count, page, page_size, next, previous, results]
+      properties:
+        count:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Author'

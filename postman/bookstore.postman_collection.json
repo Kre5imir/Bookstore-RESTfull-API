@@ -1,0 +1,382 @@
+{
+  "info": {
+    "name": "Readify Bookstore API",
+    "description": "Create, retrieve, update, and delete a book, then assert a validation error for a body that omits required fields.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "function isbn13(serial) {",
+          "  const body = String(serial % 1000000000).padStart(9, '0');",
+          "  const stem = '978' + body;",
+          "  let total = 0;",
+          "  for (let i = 0; i < stem.length; i++) {",
+          "    const digit = Number(stem[i]);",
+          "    total += i % 2 === 0 ? digit : digit * 3;",
+          "  }",
+          "  const check = (10 - (total % 10)) % 10;",
+          "  return stem + String(check);",
+          "}",
+          "if (!pm.collectionVariables.get('isbn')) {",
+          "  const seed = Date.now() % 1000000000;",
+          "  pm.collectionVariables.set('isbn', isbn13(seed));",
+          "  pm.collectionVariables.set('updatedIsbn', isbn13(seed + 1));",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Health check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/health"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('health is ok', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.status).to.eql('ok');",
+              "  pm.expect(body.checks.database).to.eql('ok');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create author",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Ursula K. Le Guin\",\n  \"bio\": \"American author of speculative fiction.\"\n}"
+        },
+        "url": "{{baseUrl}}/authors"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('author is created', function () {",
+              "  pm.response.to.have.status(201);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.id).to.be.a('number');",
+              "  pm.expect(body.name).to.eql('Ursula K. Le Guin');",
+              "  pm.expect(pm.response.headers.get('Location')).to.include('/authors/' + body.id);",
+              "  pm.collectionVariables.set('authorId', String(body.id));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create book",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"The Left Hand of Darkness\",\n  \"isbn\": \"{{isbn}}\",\n  \"published_year\": 1969,\n  \"price\": \"14.99\",\n  \"in_stock\": true,\n  \"description\": \"A novel set on the planet Gethen.\",\n  \"author_id\": {{authorId}}\n}"
+        },
+        "url": "{{baseUrl}}/books"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('book is created', function () {",
+              "  pm.response.to.have.status(201);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.title).to.eql('The Left Hand of Darkness');",
+              "  pm.expect(body.isbn).to.eql(pm.collectionVariables.get('isbn'));",
+              "  pm.expect(body.price).to.eql('14.99');",
+              "  pm.expect(String(body.author.id)).to.eql(String(pm.collectionVariables.get('authorId')));",
+              "  pm.expect(pm.response.headers.get('Location')).to.include('/books/' + body.id);",
+              "  pm.collectionVariables.set('bookId', String(body.id));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Retrieve book",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/books/{{bookId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('book can be retrieved', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const body = pm.response.json();",
+              "  pm.expect(String(body.id)).to.eql(String(pm.collectionVariables.get('bookId')));",
+              "  pm.expect(body.title).to.eql('The Left Hand of Darkness');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Update book",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"The Left Hand of Darkness (Revised)\",\n  \"isbn\": \"{{updatedIsbn}}\",\n  \"published_year\": 1969,\n  \"price\": \"16.50\",\n  \"in_stock\": true,\n  \"description\": \"Updated edition.\",\n  \"author_id\": {{authorId}}\n}"
+        },
+        "url": "{{baseUrl}}/books/{{bookId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('book is replaced', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.title).to.eql('The Left Hand of Darkness (Revised)');",
+              "  pm.expect(body.price).to.eql('16.50');",
+              "  pm.expect(body.isbn).to.eql(pm.collectionVariables.get('updatedIsbn'));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Retrieve updated book",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/books/{{bookId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('update was stored', function () {",
+              "  pm.response.to.have.status(200);",
+              "  pm.expect(pm.response.json().title).to.eql('The Left Hand of Darkness (Revised)');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Partially update book",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"price\": \"18.00\"\n}"
+        },
+        "url": "{{baseUrl}}/books/{{bookId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('patch changes only price', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.price).to.eql('18.00');",
+              "  pm.expect(body.title).to.eql('The Left Hand of Darkness (Revised)');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "List books",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/books"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('list includes the book', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const body = pm.response.json();",
+              "  const bookId = String(pm.collectionVariables.get('bookId'));",
+              "  const found = body.results.some(function (book) { return String(book.id) === bookId; });",
+              "  pm.expect(found).to.eql(true);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Delete book",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": "{{baseUrl}}/books/{{bookId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('book is deleted', function () {",
+              "  pm.response.to.have.status(204);",
+              "  pm.expect(pm.response.text()).to.eql('');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Retrieve deleted book",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/books/{{bookId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('deleted book is not found', function () {",
+              "  pm.response.to.have.status(404);",
+              "  pm.expect(pm.response.json().error.code).to.eql('not_found');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reject book missing required fields",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{}"
+        },
+        "url": "{{baseUrl}}/books"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('missing fields are a validation error', function () {",
+              "  pm.response.to.have.status(400);",
+              "  const error = pm.response.json().error;",
+              "  pm.expect(error.code).to.eql('validation_error');",
+              "  pm.expect(error.details).to.have.property('title');",
+              "  pm.expect(error.details).to.have.property('isbn');",
+              "  pm.expect(error.details).to.have.property('published_year');",
+              "  pm.expect(error.details).to.have.property('price');",
+              "  pm.expect(error.details).to.have.property('author_id');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "List authors",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/authors"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('authors can be listed', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.count).to.be.at.least(1);",
+              "  const authorId = String(pm.collectionVariables.get('authorId'));",
+              "  const found = body.results.some(function (author) { return String(author.id) === authorId; });",
+              "  pm.expect(found).to.eql(true);",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

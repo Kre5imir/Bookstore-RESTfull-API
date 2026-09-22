@@ -18,3 +18,6 @@ env/
 .env
 .env.*
 !.env.example
+
+# Local staging deploy
+.staging/
