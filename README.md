@@ -123,7 +123,7 @@ The script migrates, starts `runserver` on port 8000, waits for `/health`, and r
 
 1. **Install dependencies** installs `requirements.txt` and imports Django.
 2. **Run tests** installs dependencies, migrates, runs `python manage.py test`, then runs the Postman collection.
-3. **Deploy to staging** runs only after those tests pass on a push to `main`. `scripts/deploy_staging.sh` writes `.staging/deploy-manifest.json`, migrates a staging SQLite database, boots the API with `DJANGO_DEBUG=false`, and requires `GET /health` to return success. The staging process is stopped when the job finishes; the manifest and database path are the deploy record on that runner.
+3. **Deploy to staging** runs only after those tests pass on a push to `main`. `scripts/deploy_staging.sh` writes `.staging/deploy-manifest.json`, migrates a staging SQLite database, runs Django's deployment check, boots the API with `DJANGO_DEBUG=false`, and requires `GET /health` to return success. Local staging is plain HTTP, so the deployment check still warns about HTTPS cookie and redirect settings. The staging process is stopped when the job finishes; the manifest and database path are the deploy record on that runner.
 
 Set `DJANGO_SECRET_KEY` and `DJANGO_ALLOWED_HOSTS` in a real environment before pointing traffic at the process. `BOOKSTORE_DB_PATH` selects the SQLite file.
 

@@ -14,7 +14,7 @@ mkdir -p "$STAGING_DIR"
 
 export DJANGO_DEBUG=false
 export DJANGO_ALLOWED_HOSTS="${DJANGO_ALLOWED_HOSTS:-127.0.0.1,localhost}"
-export DJANGO_SECRET_KEY="${DJANGO_SECRET_KEY:-staging-only-secret-key-not-for-production-use}"
+export DJANGO_SECRET_KEY="${DJANGO_SECRET_KEY:-local-staging-secret-key-not-for-production-0123456789abcdef}"
 export BOOKSTORE_DB_PATH="$STAGING_DIR/db.sqlite3"
 
 GIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
